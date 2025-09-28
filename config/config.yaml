@@ -1,0 +1,22 @@
+# Orca Orchestrator Configuration
+
+server:
+  host: "localhost"
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+
+docker:
+  host: "unix:///var/run/docker.sock"  # Linux/macOS
+  # host: "npipe:////./pipe/docker_engine"  # Windows
+  version: "1.41"
+
+storage:
+  data_dir: "./data"
+  backup_enabled: true
+  backup_interval: "1h"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
