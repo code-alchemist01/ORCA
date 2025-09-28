@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"orca/pkg/container"
@@ -41,8 +42,54 @@ func (s *OrcaServer) listContainersHandler(w http.ResponseWriter, r *http.Reques
 func (s *OrcaServer) createContainerHandler(w http.ResponseWriter, r *http.Request) {
 	var spec container.ContainerSpec
 	if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
-		http.Error(w, "Geçersiz JSON", http.StatusBadRequest)
+		http.Error(w, "Geçersiz JSON formatı", http.StatusBadRequest)
 		return
+	}
+
+	// Input validation
+	if spec.Name == "" {
+		http.Error(w, "Container adı boş olamaz", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Image == "" {
+		http.Error(w, "Container image boş olamaz", http.StatusBadRequest)
+		return
+	}
+
+	// Validate ports if specified
+	for hostPortStr, containerPortStr := range spec.Ports {
+		// Parse host port
+		hostPort := 0
+		if hostPortStr != "" {
+			if hp, err := strconv.Atoi(hostPortStr); err != nil {
+				http.Error(w, "Geçersiz host port formatı", http.StatusBadRequest)
+				return
+			} else {
+				hostPort = hp
+			}
+		}
+
+		// Parse container port
+		containerPort := 0
+		if containerPortStr != "" {
+			if cp, err := strconv.Atoi(containerPortStr); err != nil {
+				http.Error(w, "Geçersiz container port formatı", http.StatusBadRequest)
+				return
+			} else {
+				containerPort = cp
+			}
+		}
+
+		// Validate port ranges
+		if hostPort < 1 || hostPort > 65535 {
+			http.Error(w, "Host port numarası 1-65535 arasında olmalıdır", http.StatusBadRequest)
+			return
+		}
+		if containerPort < 1 || containerPort > 65535 {
+			http.Error(w, "Container port numarası 1-65535 arasında olmalıdır", http.StatusBadRequest)
+			return
+		}
 	}
 
 	c, err := s.containerManager.Create(r.Context(), spec)
@@ -185,7 +232,16 @@ func (s *OrcaServer) containerLogsHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logs, err := s.containerManager.Logs(r.Context(), containerID)
+	// Parse tail parameter from query string
+	tailStr := r.URL.Query().Get("tail")
+	tail := 100 // default value
+	if tailStr != "" {
+		if parsedTail, err := strconv.Atoi(tailStr); err == nil && parsedTail > 0 {
+			tail = parsedTail
+		}
+	}
+
+	logs, err := s.containerManager.LogsWithTail(r.Context(), containerID, tail)
 	if err != nil {
 		s.logger.WithError(err).Error("Container logları alınamadı")
 		http.Error(w, "Container logları alınamadı", http.StatusInternalServerError)
@@ -208,7 +264,33 @@ func (s *OrcaServer) listDeploymentsHandler(w http.ResponseWriter, r *http.Reque
 func (s *OrcaServer) createDeploymentHandler(w http.ResponseWriter, r *http.Request) {
 	var spec container.DeploymentSpec
 	if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
-		http.Error(w, "Geçersiz JSON", http.StatusBadRequest)
+		http.Error(w, "Geçersiz JSON formatı", http.StatusBadRequest)
+		return
+	}
+
+	// Input validation
+	if spec.Name == "" {
+		http.Error(w, "Deployment adı boş olamaz", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Replicas < 1 {
+		http.Error(w, "Replica sayısı en az 1 olmalıdır", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Replicas > 100 {
+		http.Error(w, "Replica sayısı en fazla 100 olabilir", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Container.Name == "" {
+		http.Error(w, "Container adı boş olamaz", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Container.Image == "" {
+		http.Error(w, "Container image boş olamaz", http.StatusBadRequest)
 		return
 	}
 
@@ -273,8 +355,41 @@ func (s *OrcaServer) listServicesHandler(w http.ResponseWriter, r *http.Request)
 func (s *OrcaServer) createServiceHandler(w http.ResponseWriter, r *http.Request) {
 	var spec container.ServiceSpec
 	if err := json.NewDecoder(r.Body).Decode(&spec); err != nil {
-		http.Error(w, "Geçersiz JSON", http.StatusBadRequest)
+		http.Error(w, "Geçersiz JSON formatı", http.StatusBadRequest)
 		return
+	}
+
+	// Input validation
+	if spec.Name == "" {
+		http.Error(w, "Service adı boş olamaz", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Type == "" {
+		http.Error(w, "Service tipi belirtilmelidir", http.StatusBadRequest)
+		return
+	}
+
+	if spec.Type != "ClusterIP" && spec.Type != "NodePort" && spec.Type != "LoadBalancer" {
+		http.Error(w, "Geçersiz service tipi. Desteklenen tipler: ClusterIP, NodePort, LoadBalancer", http.StatusBadRequest)
+		return
+	}
+
+	if len(spec.Ports) == 0 {
+		http.Error(w, "En az bir port tanımlanmalıdır", http.StatusBadRequest)
+		return
+	}
+
+	// Validate ports
+	for _, port := range spec.Ports {
+		if port.Port < 1 || port.Port > 65535 {
+			http.Error(w, "Port numarası 1-65535 arasında olmalıdır", http.StatusBadRequest)
+			return
+		}
+		if port.TargetPort < 1 || port.TargetPort > 65535 {
+			http.Error(w, "Hedef port numarası 1-65535 arasında olmalıdır", http.StatusBadRequest)
+			return
+		}
 	}
 
 	service, err := s.scheduler.CreateService(r.Context(), spec)

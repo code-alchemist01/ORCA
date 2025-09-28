@@ -42,7 +42,18 @@ func (m *Manager) Create(ctx context.Context, spec ContainerSpec) (*Container, e
 	exposedPorts := nat.PortSet{}
 
 	for containerPort, hostPort := range spec.Ports {
-		port, err := nat.NewPort("tcp", containerPort)
+		// Parse container port (remove protocol if present)
+		portStr := containerPort
+		protocol := "tcp"
+		if strings.Contains(containerPort, "/") {
+			parts := strings.Split(containerPort, "/")
+			if len(parts) == 2 {
+				portStr = parts[0]
+				protocol = parts[1]
+			}
+		}
+
+		port, err := nat.NewPort(protocol, portStr)
 		if err != nil {
 			return nil, fmt.Errorf("geçersiz port: %s", containerPort)
 		}
@@ -224,12 +235,26 @@ func (m *Manager) Get(ctx context.Context, containerID string) (*Container, erro
 	}, nil
 }
 
-// Logs gets container logs
+// Logs gets container logs with default tail of 100 lines
 func (m *Manager) Logs(ctx context.Context, containerID string) (string, error) {
+	return m.LogsWithTail(ctx, containerID, 100)
+}
+
+// LogsWithTail gets container logs with specified tail count
+func (m *Manager) LogsWithTail(ctx context.Context, containerID string, tail int) (string, error) {
+	// Limit tail to prevent excessive memory usage
+	const maxTail = 10000
+	if tail <= 0 {
+		tail = 100
+	}
+	if tail > maxTail {
+		tail = maxTail
+	}
+
 	options := types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
-		Tail:       "100",
+		Tail:       fmt.Sprintf("%d", tail),
 	}
 
 	reader, err := m.client.ContainerLogs(ctx, containerID, options)
@@ -238,7 +263,11 @@ func (m *Manager) Logs(ctx context.Context, containerID string) (string, error) 
 	}
 	defer reader.Close()
 
-	logs, err := io.ReadAll(reader)
+	// Use limited buffer to prevent memory issues
+	const maxBufferSize = 10 * 1024 * 1024 // 10MB limit
+	limitedReader := io.LimitReader(reader, maxBufferSize)
+	
+	logs, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return "", fmt.Errorf("loglar okunamadı: %w", err)
 	}

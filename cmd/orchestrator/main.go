@@ -170,11 +170,11 @@ func (s *OrcaServer) setupRoutes() {
 	// Container routes
 	s.router.HandleFunc("/containers", s.listContainersHandler).Methods("GET")
 	s.router.HandleFunc("/containers", s.createContainerHandler).Methods("POST")
-	s.router.HandleFunc("/containers/{id}/start", s.startContainerHandler).Methods("POST")
-	s.router.HandleFunc("/containers/{id}/stop", s.stopContainerHandler).Methods("POST")
-	s.router.HandleFunc("/containers/{id}/remove", s.removeContainerHandler).Methods("DELETE")
-	s.router.HandleFunc("/containers/{id}/logs", s.containerLogsHandler).Methods("GET")
-	s.router.HandleFunc("/containers/{id}", s.getContainerHandler).Methods("GET")
+	s.router.HandleFunc("/containers/{name}/start", s.startContainerHandler).Methods("POST")
+	s.router.HandleFunc("/containers/{name}/stop", s.stopContainerHandler).Methods("POST")
+	s.router.HandleFunc("/containers/{name}/remove", s.removeContainerHandler).Methods("DELETE")
+	s.router.HandleFunc("/containers/{name}/logs", s.containerLogsHandler).Methods("GET")
+	s.router.HandleFunc("/containers/{name}", s.getContainerHandler).Methods("GET")
 
 	// Deployment routes
 	s.router.HandleFunc("/deployments", s.listDeploymentsHandler).Methods("GET")

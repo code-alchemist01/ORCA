@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -191,6 +192,11 @@ func (s *Scheduler) CreateService(ctx context.Context, spec container.ServiceSpe
 		}
 	}
 
+	// Validate port conflicts
+	if err := s.validatePortConflicts(spec.Ports); err != nil {
+		return nil, fmt.Errorf("port çakışması: %w", err)
+	}
+
 	service := &Service{
 		ID:        generateID(),
 		Name:      spec.Name,
@@ -288,4 +294,58 @@ func mustParseInt(s string) int {
 	var result int
 	fmt.Sscanf(s, "%d", &result)
 	return result
+}
+
+// validatePortConflicts checks for port conflicts in service ports
+func (s *Scheduler) validatePortConflicts(ports []container.ServicePort) error {
+	usedPorts := make(map[int]bool)
+	
+	// Check for conflicts within the service itself
+	for _, port := range ports {
+		if port.Port <= 0 || port.Port > 65535 {
+			return fmt.Errorf("geçersiz port numarası: %d (1-65535 arası olmalı)", port.Port)
+		}
+		
+		if port.TargetPort <= 0 || port.TargetPort > 65535 {
+			return fmt.Errorf("geçersiz hedef port numarası: %d (1-65535 arası olmalı)", port.TargetPort)
+		}
+		
+		if usedPorts[port.Port] {
+			return fmt.Errorf("port %d zaten kullanımda (aynı service içinde)", port.Port)
+		}
+		usedPorts[port.Port] = true
+	}
+	
+	// Check for conflicts with existing services
+	for _, existingService := range s.services {
+		for _, existingPort := range existingService.Spec.Ports {
+			for _, newPort := range ports {
+				if existingPort.Port == newPort.Port {
+					return fmt.Errorf("port %d zaten service '%s' tarafından kullanılıyor", newPort.Port, existingService.Name)
+				}
+			}
+		}
+	}
+	
+	// Check for conflicts with existing deployments
+	for _, deployment := range s.deployments {
+		if deployment.Spec.Container.Ports != nil {
+			for _, replica := range deployment.Replicas {
+				for containerPort, hostPortStr := range replica.Ports {
+					hostPort, err := strconv.Atoi(hostPortStr)
+					if err != nil {
+						continue // Skip invalid port strings
+					}
+					
+					for _, newPort := range ports {
+						if hostPort == newPort.Port {
+							return fmt.Errorf("port %d zaten deployment '%s' (container port %s) tarafından kullanılıyor", newPort.Port, deployment.Name, containerPort)
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return nil
 }
