@@ -113,6 +113,13 @@ Sunucu varsayılan olarak `localhost:8080` adresinde çalışır.
 # Sistem istatistikleri
 .\bin\orca.exe stats
 ```
+<img width="963" height="867" alt="Ekran görüntüsü 2025-09-28 234006" src="https://github.com/user-attachments/assets/b5fe66f7-53fc-4aff-aa28-843eadf4f52b" />
+
+<img width="1158" height="926" alt="Ekran görüntüsü 2025-09-28 234206" src="https://github.com/user-attachments/assets/c3e41b68-c453-4969-b06a-c71006b49446" />
+
+<img width="998" height="629" alt="Ekran görüntüsü 2025-09-28 234444" src="https://github.com/user-attachments/assets/ac1b9404-e3a3-42c7-9c98-b686e8705cf2" />
+
+<img width="1068" height="655" alt="Ekran görüntüsü 2025-09-28 234457" src="https://github.com/user-attachments/assets/1a0d3f49-3e33-43fe-a78a-22910c2f94be" />
 
 ## Konfigürasyon
 
